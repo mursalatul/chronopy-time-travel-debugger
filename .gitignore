@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────
 # Virtual environment
 # ──────────────────────────────────────────
-chronopy_venv/
+/chronopy_venv/
 .venv/
 venv/
 env/
