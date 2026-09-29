@@ -190,6 +190,26 @@
     }
     .connection-dot.connected { background: var(--accent-green); box-shadow: 0 0 6px rgba(22,163,74,0.4); }
 
+    /* focused variable badge (header) */
+    .focused-var-badge {
+      display: flex; align-items: center; gap: 5px;
+      background: #f0f4ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 20px;
+      padding: 3px 8px 3px 10px;
+      font-size: 11px;
+    }
+    .focused-var-label { color: #4338ca; font-weight: 600; white-space: nowrap; }
+    .focused-var-name  { font-family: var(--font-code); color: #3730a3; font-weight: 700; }
+    .focused-var-clear {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: none; background: #c7d2fe; color: #3730a3;
+      font-size: 9px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .focused-var-clear:hover { background: #a5b4fc; }
+
     /* ═══════════════════════════════════════════════════════════
        Timeline bar
     ═══════════════════════════════════════════════════════════ */
@@ -743,7 +763,12 @@
 
   <div class="header-actions">
     <button class="btn" id="btn-find-exc">⚡ Jump to Exception</button>
-    <button class="btn primary" id="btn-causal">🔗 Causal Chain</button>
+    <button class="btn primary" id="btn-causal" title="Trace why a variable has its current value — select a variable in the State Inspector first">🔗 Causal Chain</button>
+    <div class="focused-var-badge" id="focused-var-badge" style="display:none">
+      <span class="focused-var-label">Tracing:</span>
+      <span class="focused-var-name" id="focused-var-display"></span>
+      <button class="focused-var-clear" id="btn-clear-focus" title="Clear selection">✕</button>
+    </div>
     <div class="connection-badge">
       <div class="connection-dot" id="conn-dot"></div>
       <span id="conn-label">Connecting…</span>
@@ -893,14 +918,34 @@
 
 <!-- ════ Causal Chain Modal ════ -->
 <div class="modal-overlay" id="modal-causal">
-  <div class="modal">
+  <div class="modal" style="width:720px">
     <div class="modal-header">
       <div class="modal-title">
-        Causal Chain — <span class="tag" id="causal-var-name">—</span>
+        🔗 Causal Chain
+        <span class="tag" id="causal-var-name">—</span>
       </div>
       <button class="modal-close" onclick="closeModal('modal-causal')">✕</button>
     </div>
-    <div class="modal-body" style="padding-left:40px;">
+    <!-- Explanation bar always visible at the top -->
+    <div id="causal-explainer" style="
+      padding: 10px 18px;
+      background: #f0f4ff;
+      border-bottom: 1px solid #c7d2fe;
+      font-size: 12px;
+      color: #3730a3;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    ">
+      <span style="font-size:18px;flex-shrink:0">💡</span>
+      <div>
+        <strong>What is this?</strong>&nbsp; The Causal Chain traces <em>backwards</em> through
+        execution to show you the exact sequence of statements that produced the
+        selected variable's value. Each card below is one step that contributed.
+        <strong>Click any card</strong> to jump the debugger to that exact moment.
+      </div>
+    </div>
+    <div class="modal-body" style="padding: 16px 20px 16px 44px;">
       <div id="causal-list"></div>
     </div>
   </div>
@@ -1221,6 +1266,11 @@ function renderVarsPanel() {
 
 function setFocusedVar(name) {
   focusedVar = name;
+  // Update header badge
+  const badge   = document.getElementById('focused-var-badge');
+  const display = document.getElementById('focused-var-display');
+  badge.style.display   = 'flex';
+  display.textContent   = name;
   renderVarsPanel();
 }
 
@@ -1290,35 +1340,95 @@ async function showVarHistory(varName) {
 
 // ── Causal chain modal ────────────────────────────────────────
 async function showCausalChain() {
+  // If no variable is selected, open modal with a how-to guide instead of alert()
   if (!focusedVar) {
-    alert('First click a variable in the State Inspector to select it, then click Causal Chain.');
+    document.getElementById('causal-var-name').textContent = 'No variable selected';
+    document.getElementById('causal-list').innerHTML = `
+      <div style="text-align:center;padding:10px 0 20px">
+        <div style="font-size:40px;margin-bottom:12px">🎯</div>
+        <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px">
+          Select a variable first
+        </div>
+        <div style="font-size:13px;color:var(--text-secondary);max-width:400px;margin:0 auto;line-height:1.6">
+          The Causal Chain shows you <strong>why a variable has its current value</strong> —
+          tracing backwards through every statement that contributed to it.
+        </div>
+        <div style="margin:20px auto;max-width:380px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:left">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px">How to use it</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:flex-start;gap:10px">
+              <div style="width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+              <div style="font-size:12px;color:var(--text-secondary)">Step through the execution to a point where a variable has an unexpected value.</div>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:10px">
+              <div style="width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+              <div style="font-size:12px;color:var(--text-secondary)">In the <strong>State Inspector</strong> (right panel), <strong>click the row</strong> of the variable you want to investigate. It will highlight in blue.</div>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:10px">
+              <div style="width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
+              <div style="font-size:12px;color:var(--text-secondary)">Click the <strong>🔗 Causal Chain</strong> button again — the chain will appear here.</div>
+            </div>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-causal')" style="
+          padding: 8px 20px; border-radius: 8px;
+          border: 1px solid var(--border); background: var(--bg-elevated);
+          color: var(--text-secondary); font-family: var(--font-ui);
+          font-size: 12px; cursor: pointer;
+        ">Got it — close</button>
+      </div>`;
+    openModal('modal-causal');
     return;
   }
+
   const step = state.cursor;
-  document.getElementById('causal-var-name').textContent = `${focusedVar} @ step ${step}`;
-  document.getElementById('causal-list').innerHTML = '<div class="empty-state"><div class="icon">⏳</div>Analysing…</div>';
+  document.getElementById('causal-var-name').textContent = `${focusedVar}  @  step ${step}`;
+  document.getElementById('causal-list').innerHTML = '<div class="empty-state"><div class="icon">⏳</div>Analysing backward data-flow…</div>';
   openModal('modal-causal');
 
   const res   = await fetch(`/api/causal-chain/${step}/${encodeURIComponent(focusedVar)}`);
   const chain = await res.json();
 
   if (!chain.length) {
-    document.getElementById('causal-list').innerHTML =
-      '<div class="empty-state"><div class="icon">🔗</div>No causal chain found. The variable may not have changed yet.</div>';
+    document.getElementById('causal-list').innerHTML = `
+      <div style="text-align:center;padding:16px 0">
+        <div style="font-size:32px;margin-bottom:10px">🔍</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:6px">No causal chain found</div>
+        <div style="font-size:12px;color:var(--text-secondary);max-width:340px;margin:0 auto;line-height:1.6">
+          This usually means <strong>${escapeHtml(focusedVar)}</strong> hasn't been assigned
+          yet at step ${step}, or it came from a C-level function that wasn't traced.
+          Try stepping forward a few more events and running again.
+        </div>
+      </div>`;
     return;
   }
 
-  document.getElementById('causal-list').innerHTML = chain.map((ev, i) => `
-    <div class="causal-node" style="position:relative" data-index="${i+1}"
-         onclick="closeModal('modal-causal');wsSend('jump',{step:${ev.step_index}})">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span class="event-kind-badge badge-${ev.kind}">${ev.kind}</span>
-        <span style="font-size:11px;font-weight:500;color:var(--text-primary)">${ev.frame?.func_name || '?'}</span>
-        <span style="font-size:10px;color:var(--text-muted);margin-left:auto">step ${ev.step_index}</span>
+  // Render chain with numbered nodes and arrow connectors
+  document.getElementById('causal-list').innerHTML =
+    `<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
+      Found <strong>${chain.length}</strong> contributing step${chain.length > 1 ? 's' : ''} —
+      earliest first. Click any card to jump there.
+    </div>` +
+    chain.map((ev, i) => `
+      <div class="causal-node" style="position:relative" data-index="${i+1}"
+           onclick="closeModal('modal-causal');wsSend('jump',{step:${ev.step_index}})">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span class="event-kind-badge badge-${ev.kind}">${ev.kind}</span>
+          <span style="font-size:12px;font-weight:600;color:var(--text-primary)">${ev.frame?.func_name || '?'}</span>
+          <span style="font-size:10px;color:var(--text-muted);margin-left:auto">step ${ev.step_index}</span>
+        </div>
+        ${ev.vars_changed
+          ? `<div class="causal-src">${Object.entries(ev.vars_changed).map(([k,v]) =>
+              `<span style="color:var(--brand);font-weight:600">${escapeHtml(k)}</span> = <span style="color:var(--accent-green)">${escapeHtml(String(v).substring(0,80))}</span>`
+            ).join(' &nbsp;·&nbsp; ')}</div>`
+          : ''}
+        <div style="font-size:10px;color:var(--text-muted);margin-top:5px">
+          📄 ${shortFilename(ev.frame?.filename)} &nbsp;·&nbsp; line ${ev.lineno}
+        </div>
       </div>
-      ${ev.vars_changed ? `<div class="causal-src">${escapeHtml(JSON.stringify(ev.vars_changed)).substring(0,120)}</div>` : ''}
-      <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${shortFilename(ev.frame?.filename)} · line ${ev.lineno}</div>
-    </div>`).join('');
+      ${i < chain.length - 1
+        ? '<div style="text-align:center;color:var(--text-muted);font-size:16px;margin:2px 0">↓</div>'
+        : ''}`.join(''));
 }
 
 // ── Modal helpers ─────────────────────────────────────────────
@@ -1334,7 +1444,11 @@ function setupControls() {
   document.getElementById('btn-play').addEventListener('click', togglePlay);
   document.getElementById('btn-find-exc').addEventListener('click', () => wsSend('find_exception', { direction: 'next' }));
   document.getElementById('btn-causal').addEventListener('click', showCausalChain);
-
+  document.getElementById('btn-clear-focus').addEventListener('click', () => {
+    focusedVar = null;
+    document.getElementById('focused-var-badge').style.display = 'none';
+    renderVarsPanel();
+  });
   const scrubber = document.getElementById('tl-scrubber');
   scrubber.addEventListener('input', () => wsSend('jump', { step: parseInt(scrubber.value) }));
 
