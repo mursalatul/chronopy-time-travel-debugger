@@ -1386,49 +1386,63 @@ async function showCausalChain() {
   document.getElementById('causal-list').innerHTML = '<div class="empty-state"><div class="icon">⏳</div>Analysing backward data-flow…</div>';
   openModal('modal-causal');
 
-  const res   = await fetch(`/api/causal-chain/${step}/${encodeURIComponent(focusedVar)}`);
-  const chain = await res.json();
+  try {
+    const res   = await fetch(`/api/causal-chain/${step}/${encodeURIComponent(focusedVar)}`);
+    if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+    const chain = await res.json();
 
-  if (!chain.length) {
+    if (!chain || !chain.length) {
+      document.getElementById('causal-list').innerHTML = `
+        <div style="text-align:center;padding:16px 0">
+          <div style="font-size:32px;margin-bottom:10px">🔍</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:6px">No causal chain found</div>
+          <div style="font-size:12px;color:var(--text-secondary);max-width:340px;margin:0 auto;line-height:1.6">
+            This usually means <strong>${escapeHtml(focusedVar)}</strong> hasn't been assigned
+            yet at step ${step}, or it came from a C-level function that wasn't traced.
+            Try stepping forward a few more events and running again.
+          </div>
+        </div>`;
+      return;
+    }
+
+    // Render chain with numbered nodes and arrow connectors
+    document.getElementById('causal-list').innerHTML =
+      `<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
+        Found <strong>${chain.length}</strong> contributing step${chain.length > 1 ? 's' : ''} —
+        earliest first. Click any card to jump there.
+      </div>` +
+      chain.map((ev, i) => `
+        <div class="causal-node" style="position:relative" data-index="${i+1}"
+             onclick="closeModal('modal-causal');wsSend('jump',{step:${ev.step_index}})">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="event-kind-badge badge-${ev.kind}">${ev.kind}</span>
+            <span style="font-size:12px;font-weight:600;color:var(--text-primary)">${ev.frame?.func_name || '?'}</span>
+            <span style="font-size:10px;color:var(--text-muted);margin-left:auto">step ${ev.step_index}</span>
+          </div>
+          ${ev.vars_changed
+            ? `<div class="causal-src">${Object.entries(ev.vars_changed).map(([k,v]) =>
+                `<span style="color:var(--brand);font-weight:600">${escapeHtml(k)}</span> = <span style="color:var(--accent-green)">${escapeHtml(String(v).substring(0,80))}</span>`
+              ).join(' &nbsp;·&nbsp; ')}</div>`
+            : ''}
+          <div style="font-size:10px;color:var(--text-muted);margin-top:5px">
+            📄 ${shortFilename(ev.frame?.filename)} &nbsp;·&nbsp; line ${ev.lineno}
+          </div>
+        </div>
+        ${i < chain.length - 1
+          ? '<div style="text-align:center;color:var(--text-muted);font-size:16px;margin:2px 0">↓</div>'
+          : ''}
+      `).join('');
+  } catch (err) {
+    console.error('Causal chain error:', err);
     document.getElementById('causal-list').innerHTML = `
       <div style="text-align:center;padding:16px 0">
-        <div style="font-size:32px;margin-bottom:10px">🔍</div>
-        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:6px">No causal chain found</div>
+        <div style="font-size:32px;margin-bottom:10px">⚠️</div>
+        <div style="font-size:14px;font-weight:600;color:var(--accent-red);margin-bottom:6px">Error loading causal chain</div>
         <div style="font-size:12px;color:var(--text-secondary);max-width:340px;margin:0 auto;line-height:1.6">
-          This usually means <strong>${escapeHtml(focusedVar)}</strong> hasn't been assigned
-          yet at step ${step}, or it came from a C-level function that wasn't traced.
-          Try stepping forward a few more events and running again.
+          ${escapeHtml(err.message || 'Unknown error')}
         </div>
       </div>`;
-    return;
   }
-
-  // Render chain with numbered nodes and arrow connectors
-  document.getElementById('causal-list').innerHTML =
-    `<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
-      Found <strong>${chain.length}</strong> contributing step${chain.length > 1 ? 's' : ''} —
-      earliest first. Click any card to jump there.
-    </div>` +
-    chain.map((ev, i) => `
-      <div class="causal-node" style="position:relative" data-index="${i+1}"
-           onclick="closeModal('modal-causal');wsSend('jump',{step:${ev.step_index}})">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span class="event-kind-badge badge-${ev.kind}">${ev.kind}</span>
-          <span style="font-size:12px;font-weight:600;color:var(--text-primary)">${ev.frame?.func_name || '?'}</span>
-          <span style="font-size:10px;color:var(--text-muted);margin-left:auto">step ${ev.step_index}</span>
-        </div>
-        ${ev.vars_changed
-          ? `<div class="causal-src">${Object.entries(ev.vars_changed).map(([k,v]) =>
-              `<span style="color:var(--brand);font-weight:600">${escapeHtml(k)}</span> = <span style="color:var(--accent-green)">${escapeHtml(String(v).substring(0,80))}</span>`
-            ).join(' &nbsp;·&nbsp; ')}</div>`
-          : ''}
-        <div style="font-size:10px;color:var(--text-muted);margin-top:5px">
-          📄 ${shortFilename(ev.frame?.filename)} &nbsp;·&nbsp; line ${ev.lineno}
-        </div>
-      </div>
-      ${i < chain.length - 1
-        ? '<div style="text-align:center;color:var(--text-muted);font-size:16px;margin:2px 0">↓</div>'
-        : ''}`.join(''));
 }
 
 // ── Modal helpers ─────────────────────────────────────────────

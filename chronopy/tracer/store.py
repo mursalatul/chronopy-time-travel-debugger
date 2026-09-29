@@ -206,6 +206,19 @@ class TraceStore:
             return
 
         history = self._var_history.get(filename, {}).get(func_name, {}).get(var_name, [])
+        if not history:
+            # Fallback: search across functions in current file first, then all files
+            steps_found: list[int] = []
+            for fn_vars in self._var_history.get(filename, {}).values():
+                if var_name in fn_vars:
+                    steps_found.extend(fn_vars[var_name])
+            if not steps_found:
+                for file_data in self._var_history.values():
+                    for fn_vars in file_data.values():
+                        if var_name in fn_vars:
+                            steps_found.extend(fn_vars[var_name])
+            history = sorted(steps_found)
+
         # Find the last write before up_to_step
         write_step = None
         for si in reversed(history):
@@ -222,7 +235,9 @@ class TraceStore:
             return
 
         # Find names used on that source line and recurse
-        source_line = self._get_source_line(filename, ev.lineno)
+        cur_file = ev.frame.filename if ev.frame else filename
+        cur_func = ev.frame.func_name if ev.frame else func_name
+        source_line = self._get_source_line(cur_file, ev.lineno)
         if source_line:
             import ast
             try:
@@ -233,8 +248,8 @@ class TraceStore:
                             self._trace_var_backwards(
                                 var_name=node.id,
                                 up_to_step=write_step,
-                                filename=filename,
-                                func_name=func_name,
+                                filename=cur_file,
+                                func_name=cur_func,
                                 visited=visited,
                                 depth=depth + 1,
                                 max_depth=max_depth,
