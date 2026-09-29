@@ -673,6 +673,41 @@
     @keyframes loadSlide { from { width: 15%; } to { width: 80%; } }
 
     /* ═══════════════════════════════════════════════════════════
+       Speed control
+    ═══════════════════════════════════════════════════════════ */
+    .speed-control {
+      display: flex; align-items: center; gap: 5px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px 6px;
+      flex-shrink: 0;
+    }
+    .speed-label {
+      font-size: 10px; font-weight: 600;
+      color: var(--text-muted); white-space: nowrap;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding-right: 3px;
+    }
+    .speed-preset {
+      width: 34px; height: 22px;
+      border-radius: 5px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: var(--font-code);
+      font-size: 10px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .speed-preset:hover { background: var(--bg-surface); color: var(--brand); border-color: var(--border); }
+    .speed-preset.active {
+      background: var(--brand); color: #fff;
+      border-color: var(--brand);
+    }
+    .speed-divider { width: 1px; height: 14px; background: var(--border); flex-shrink: 0; }
+
+    /* ═══════════════════════════════════════════════════════════
        Empty state
     ═══════════════════════════════════════════════════════════ */
     .empty-state {
@@ -728,6 +763,18 @@
     <button class="ctrl-btn large" id="btn-play" title="Play / Pause (Space)">▶</button>
     <button class="ctrl-btn" id="btn-fwd1"   title="Next step (→)">›</button>
     <button class="ctrl-btn" id="btn-fwd10"  title="Advance 10 steps (↓)">»</button>
+
+    <!-- Speed control -->
+    <div class="speed-control" title="Playback speed — steps per tick">
+      <span class="speed-label">Speed</span>
+      <div class="speed-divider"></div>
+      <button class="speed-preset" data-ms="400"  data-label="0.25×">0.25×</button>
+      <button class="speed-preset" data-ms="200"  data-label="0.5×">0.5×</button>
+      <button class="speed-preset active" data-ms="100" data-label="1×">1×</button>
+      <button class="speed-preset" data-ms="50"   data-label="2×">2×</button>
+      <button class="speed-preset" data-ms="20"   data-label="5×">5×</button>
+      <button class="speed-preset" data-ms="6"    data-label="16×">16×</button>
+    </div>
 
     <div class="timeline-scrubber-wrap">
       <div class="timeline-minimap">
@@ -1311,6 +1358,39 @@ function setupControls() {
   });
 }
 
+// ── Playback speed ────────────────────────────────────────────
+let playSpeedMs = 100;  // milliseconds between steps (default = 1×)
+
+function setupSpeedControl() {
+  document.querySelectorAll('.speed-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.speed-preset').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      playSpeedMs = parseInt(btn.dataset.ms);
+      // If currently playing, restart interval at new speed
+      if (playInterval) {
+        clearInterval(playInterval);
+        playInterval = null;
+        _startPlayInterval();
+      }
+    });
+  });
+}
+
+function _startPlayInterval() {
+  const btn = document.getElementById('btn-play');
+  btn.textContent = '⏸';
+  btn.classList.add('active-play');
+  playInterval = setInterval(() => {
+    if ((state.cursor ?? 0) >= (state.total ?? 1) - 1) {
+      clearInterval(playInterval); playInterval = null;
+      btn.textContent = '▶'; btn.classList.remove('active-play');
+      return;
+    }
+    wsSend('forward', { n: 1 });
+  }, playSpeedMs);
+}
+
 // ── Playback ──────────────────────────────────────────────────
 function togglePlay() {
   const btn = document.getElementById('btn-play');
@@ -1320,21 +1400,13 @@ function togglePlay() {
     btn.textContent = '▶';
     btn.classList.remove('active-play');
   } else {
-    btn.textContent = '⏸';
-    btn.classList.add('active-play');
-    playInterval = setInterval(() => {
-      if ((state.cursor ?? 0) >= (state.total ?? 1) - 1) {
-        clearInterval(playInterval); playInterval = null;
-        btn.textContent = '▶'; btn.classList.remove('active-play');
-        return;
-      }
-      wsSend('forward', { n: 1 });
-    }, 100);
+    _startPlayInterval();
   }
 }
 
 // ── Boot ──────────────────────────────────────────────────────
 setupControls();
+setupSpeedControl();
 loadData();
 </script>
 </body>
