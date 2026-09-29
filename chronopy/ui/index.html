@@ -676,36 +676,36 @@
        Speed control
     ═══════════════════════════════════════════════════════════ */
     .speed-control {
-      display: flex; align-items: center; gap: 5px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 3px 6px;
+      display: flex; align-items: center; gap: 6px;
       flex-shrink: 0;
     }
     .speed-label {
       font-size: 10px; font-weight: 600;
       color: var(--text-muted); white-space: nowrap;
       text-transform: uppercase; letter-spacing: 0.05em;
-      padding-right: 3px;
     }
-    .speed-preset {
-      width: 34px; height: 22px;
-      border-radius: 5px;
-      border: 1px solid transparent;
-      background: transparent;
-      color: var(--text-muted);
+    #speed-select {
+      height: 30px;
+      padding: 0 26px 0 9px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--bg-elevated);
+      color: var(--text-primary);
       font-family: var(--font-code);
-      font-size: 10px; font-weight: 600;
-      cursor: pointer; transition: all 0.15s;
-      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      /* custom arrow */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239ca3af' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      min-width: 80px;
     }
-    .speed-preset:hover { background: var(--bg-surface); color: var(--brand); border-color: var(--border); }
-    .speed-preset.active {
-      background: var(--brand); color: #fff;
-      border-color: var(--brand);
-    }
-    .speed-divider { width: 1px; height: 14px; background: var(--border); flex-shrink: 0; }
+    #speed-select:hover  { border-color: #c7d0e8; }
+    #speed-select:focus  { border-color: var(--border-active); box-shadow: 0 0 0 3px rgba(59,76,202,0.1); }
 
     /* ═══════════════════════════════════════════════════════════
        Empty state
@@ -764,16 +764,31 @@
     <button class="ctrl-btn" id="btn-fwd1"   title="Next step (→)">›</button>
     <button class="ctrl-btn" id="btn-fwd10"  title="Advance 10 steps (↓)">»</button>
 
-    <!-- Speed control -->
-    <div class="speed-control" title="Playback speed — steps per tick">
+    <!-- Speed control dropdown -->
+    <div class="speed-control">
       <span class="speed-label">Speed</span>
-      <div class="speed-divider"></div>
-      <button class="speed-preset" data-ms="400"  data-label="0.25×">0.25×</button>
-      <button class="speed-preset" data-ms="200"  data-label="0.5×">0.5×</button>
-      <button class="speed-preset active" data-ms="100" data-label="1×">1×</button>
-      <button class="speed-preset" data-ms="50"   data-label="2×">2×</button>
-      <button class="speed-preset" data-ms="20"   data-label="5×">5×</button>
-      <button class="speed-preset" data-ms="6"    data-label="16×">16×</button>
+      <select id="speed-select" title="Playback speed">
+        <optgroup label="Slower">
+          <option value="2000">0.05×  (step/2s)</option>
+          <option value="1000">0.1×   (step/1s)</option>
+          <option value="600"> 0.17×  (step/600ms)</option>
+          <option value="400"> 0.25×  (step/400ms)</option>
+          <option value="200"> 0.5×   (step/200ms)</option>
+        </optgroup>
+        <optgroup label="Normal">
+          <option value="100" selected>1×   (step/100ms)</option>
+          <option value="67"> 1.5×  (step/67ms)</option>
+          <option value="50"> 2×    (step/50ms)</option>
+        </optgroup>
+        <optgroup label="Faster">
+          <option value="33"> 3×    (step/33ms)</option>
+          <option value="20"> 5×    (step/20ms)</option>
+          <option value="12"> 8×    (step/12ms)</option>
+          <option value="6">  16×   (step/6ms)</option>
+          <option value="3">  32×   (step/3ms)</option>
+          <option value="1">  Max   (step/1ms)</option>
+        </optgroup>
+      </select>
     </div>
 
     <div class="timeline-scrubber-wrap">
@@ -1362,18 +1377,15 @@ function setupControls() {
 let playSpeedMs = 100;  // milliseconds between steps (default = 1×)
 
 function setupSpeedControl() {
-  document.querySelectorAll('.speed-preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.speed-preset').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      playSpeedMs = parseInt(btn.dataset.ms);
-      // If currently playing, restart interval at new speed
-      if (playInterval) {
-        clearInterval(playInterval);
-        playInterval = null;
-        _startPlayInterval();
-      }
-    });
+  const sel = document.getElementById('speed-select');
+  sel.addEventListener('change', () => {
+    playSpeedMs = parseInt(sel.value);
+    // If currently playing, restart interval at new speed immediately
+    if (playInterval) {
+      clearInterval(playInterval);
+      playInterval = null;
+      _startPlayInterval();
+    }
   });
 }
 
